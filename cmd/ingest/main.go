@@ -27,7 +27,7 @@ type wrap struct {
 func main() {
 	logger, _ := zap.NewProduction()
 	var servers []*smtpd.Server
-	for _, listen := range []protoAddr{{"", ":25"}, {"starttls", ":587"}, {"tls", ":465"}} {
+	for _, listen := range []protoAddr{{"starttls", ":25"}, {"starttls", ":587"}, {"tls", ":465"}} {
 		var err error
 		var lsnr net.Listener
 
@@ -197,11 +197,6 @@ func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) error {
 	}
 
 	logger := w.logger.With(zap.String("from", env.Sender), zap.Strings("to", env.Recipients), zap.String("peer", peerIP), zap.String("uuid", generateUUID()))
-
-	if *remotesStr == "" && *command == "" {
-		logger.Warn("no remote_host or command set; discarding mail")
-		return nil
-	}
 
 	env.AddReceivedLine(peer)
 

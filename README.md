@@ -18,5 +18,5 @@ export COUNTRY=US
 openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 -keyout private.pem -out certificate.crt -subj "/CN=$SERVER/O=$CORP/C=$COUNTRY"
 
 make build
-./bin/ingest-darwin-arm64 -local_cert certificate.crt -local_key private.pem
+./bin/ingest-darwin-arm64 -local_cert certificate.crt -local_key private.pem -hostname mail.mydom.com
 ```
