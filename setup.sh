@@ -9,3 +9,5 @@ gcloud compute instances create dummy --project=$GCLOUD_PROJECT \
 gcloud compute --project=$GCLOUD_PROJECT firewall-rules create mail --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:25,tcp:143,tcp:456,tcp:587,tcp:993 --source-ranges=0.0.0.0/0 --target-tags=smtp
 gcloud compute --project=$GCLOUD_PROJECT firewall-rules create mailv6 --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:25,tcp:143,tcp:456,tcp:587,tcp:993 --source-ranges=0::0/0 --target-tags=smtp
 
+# TODO ko
+# TODO https://cloud.google.com/compute/docs/containers/deploying-containers

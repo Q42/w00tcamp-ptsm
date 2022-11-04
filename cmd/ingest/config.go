@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"net"
-	"os"
 	"regexp"
 	"time"
 )
@@ -48,7 +47,3 @@ var (
 	allowedRecipients *regexp.Regexp
 	// remotes           = []*Remote{}
 )
-
-func init() {
-	flagset.Parse(os.Args[1:])
-}
