@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -243,9 +244,9 @@ func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) (err error) {
 				errs = append(errs, err)
 				continue
 			}
-			if strings.HasSuffix(addr.Address, *hostName) {
+			if strings.HasSuffix(addr.Address, *domain) {
 				if err := w.deliver(addr.Address, env); err != nil {
-					errs = append(errs, err)
+					errs = append(errs, errors.Wrap(err, "deliver failed"))
 				}
 			} else {
 				// Error because we are not an open relay:
@@ -274,6 +275,10 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
 		return smtpd.Error{Code: 451, Message: fmt.Sprintf("Bad recipient address %q", recipientEmail)}
 	}
 
+	if err = os.MkdirAll(path.Join("mails", emailUserName(recipientEmail)), 0777); err != nil {
+		return errors.Wrap(err, "failed to make inbox")
+	}
+
 	u, err := store.NewUser(path.Join("mails", emailUserName(recipientEmail)), emailUserName(recipientEmail), "")
 	if err != nil {
 		return err
@@ -294,7 +299,9 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
 				"Content-Type: text/plain\r\n"+
 				"\r\n"+
 				"You need to pay first", "info@"+*domain, env.Sender, time.Now().Format(time.RFC1123Z)))}
-		if err = w.emit(bounce); err != nil {
+		ctx, cancel := context.WithTimeout(context.TODO(), time.Second*10)
+		defer cancel()
+		if err = w.emit(ctx, bounce); err != nil {
 			w.logger.Error("Failed to bounce for payment", zap.String("source", env.Sender), zap.Error(err))
 		}
 	}
@@ -321,7 +328,9 @@ func (w wrap) forward(env smtpd.Envelope) error {
 	}
 
 	// Deliver to external
-	return w.emit(env)
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*10)
+	defer cancel()
+	return w.emit(ctx, env)
 }
 
 // DKIM

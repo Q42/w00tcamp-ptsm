@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -15,8 +16,9 @@ var (
 	ports = []int{465, 587, 2525, 25}
 )
 
+// TODO use a PubSub queue for this
 // copyright: https://github.com/nilslice/email/blob/master/email.go
-func (w wrap) emit(env smtpd.Envelope) error {
+func (w wrap) emit(ctx context.Context, env smtpd.Envelope) error {
 	for _, r := range env.Recipients {
 		addr, err := mail.ParseAddress(r)
 		if err != nil {
@@ -24,12 +26,12 @@ func (w wrap) emit(env smtpd.Envelope) error {
 		}
 
 		host := strings.Split(addr.Address, "@")[1]
-		addrs, err := net.LookupMX(host)
+		addrs, err := net.DefaultResolver.LookupMX(ctx, host)
 		if err != nil {
 			return err
 		}
 
-		c, err := newClient(addrs, ports)
+		c, err := newClient(ctx, addrs, ports)
 		if err != nil {
 			return err
 		}
@@ -44,7 +46,7 @@ func (w wrap) emit(env smtpd.Envelope) error {
 	return nil
 }
 
-func newClient(mx []*net.MX, ports []int) (*smtp.Client, error) {
+func newClient(ctx context.Context, mx []*net.MX, ports []int) (*smtp.Client, error) {
 	for i := range mx {
 		for j := range ports {
 			server := strings.TrimSuffix(mx[i].Host, ".")
