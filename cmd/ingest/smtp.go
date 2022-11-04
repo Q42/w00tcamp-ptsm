@@ -231,7 +231,7 @@ func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) (err error) {
 	// Abuse mails are only logged
 	if strings.HasPrefix(env.Recipients[0], "abuse@") {
 		w.logger.Warn("Abuse email report")
-		return smtpd.Error{Code: 200, Message: "Received"}
+		return smtpd.Error{Code: 250, Message: "Thank you."}
 	}
 
 	// Sender on this server
