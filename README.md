@@ -33,3 +33,5 @@ Careful with displaying emails. XSS, embedded url loading. Tracking pixels.
 IMAP and SMTP using the `AUTHENTICATE` command ([RFC 3501§6.2.2](https://www.rfc-editor.org/rfc/rfc3501#section-6.2.2)).
 
 Ref: [IMAP from local file-system](https://github.com/bcampbell/tameimap) using emersion/go-imap.
+
+[LearnDMARC](https://www.learndmarc.com/)
