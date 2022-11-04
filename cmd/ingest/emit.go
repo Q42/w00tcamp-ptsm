@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/mail"
@@ -11,7 +12,7 @@ import (
 )
 
 var (
-	ports = []int{587, 2525, 25}
+	ports = []int{465, 587, 2525, 25}
 )
 
 // copyright: https://github.com/nilslice/email/blob/master/email.go
@@ -48,7 +49,20 @@ func newClient(mx []*net.MX, ports []int) (*smtp.Client, error) {
 		for j := range ports {
 			server := strings.TrimSuffix(mx[i].Host, ".")
 			hostPort := fmt.Sprintf("%s:%d", server, ports[j])
-			client, err := smtp.Dial(hostPort)
+			var client *smtp.Client
+			var err error
+			var conn net.Conn
+			if ports[j] == 465 {
+				conn, err = tls.Dial("tcp", hostPort, &tls.Config{})
+				if err == nil {
+					client, err = smtp.NewClient(conn, server)
+				}
+			} else {
+				client, err = smtp.Dial(hostPort)
+				if ports[j] == 587 && err == nil {
+					err = client.StartTLS(&tls.Config{})
+				}
+			}
 			if err != nil {
 				if j == len(ports)-1 {
 					return nil, err
@@ -61,7 +75,7 @@ func newClient(mx []*net.MX, ports []int) (*smtp.Client, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("Couldn't connect to servers %v on any common port.", mx)
+	return nil, fmt.Errorf("couldn't connect to servers %v on any common port", mx)
 }
 
 func send(env smtpd.Envelope, c *smtp.Client, r string) error {
