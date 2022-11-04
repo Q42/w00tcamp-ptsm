@@ -14,7 +14,10 @@ import (
 )
 
 func main() {
-	logger, _ := zap.NewDevelopment(zap.IncreaseLevel(zap.DebugLevel))
+	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.DebugLevel))
+	if err != nil {
+		log.Fatal(err)
+	}
 	zap.ReplaceGlobals(logger)
 
 	ctx, cancel := context.WithCancel(context.Background())

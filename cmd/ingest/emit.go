@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/mail"
 	"net/smtp"
+	"sort"
 	"strings"
 
 	"github.com/chrj/smtpd"
@@ -21,6 +22,25 @@ var (
 // TODO use a PubSub queue for this
 // copyright: https://github.com/nilslice/email/blob/master/email.go
 func (w wrap) emit(ctx context.Context, env smtpd.Envelope) error {
+	if true {
+		for _, rec := range env.Recipients {
+			host := strings.Split(rec, "@")[1]
+			addrs, err := net.DefaultResolver.LookupMX(ctx, host)
+			if err != nil {
+				return errors.Wrap(err, "failed to lookup mx")
+			}
+			if len(addrs) == 0 {
+				return errors.Wrap(err, "no mx servers")
+			}
+			err = smtp.SendMail(addrs[0].Host+":587", nil, env.Sender, env.Recipients, env.Data)
+			if err != nil {
+				return errors.Wrap(err, "failed to create outgoing connection")
+			}
+		}
+		return nil
+	}
+
+	// Way to complicated
 	for _, r := range env.Recipients {
 		addr, err := mail.ParseAddress(r)
 		if err != nil {
@@ -47,9 +67,19 @@ func (w wrap) emit(ctx context.Context, env smtpd.Envelope) error {
 }
 
 func newClient(ctx context.Context, mx []*net.MX, ports []int) (*smtp.Client, error) {
+	sort.Slice(mx, func(i, j int) bool { return mx[i].Pref < mx[j].Pref })
+	opts := 0
+	for range mx {
+		for range ports {
+			opts++
+		}
+	}
+
+	pos := 0
 	for i := range mx {
 		for j := range ports {
-			zap.S().Debugf("mx=%s port=%s", mx[i], ports[j])
+			pos++
+			zap.S().Debugf("mx=%s port=%d", mx[i].Host, ports[j])
 			server := strings.TrimSuffix(mx[i].Host, ".")
 			hostPort := fmt.Sprintf("%s:%d", server, ports[j])
 			var client *smtp.Client
@@ -70,7 +100,7 @@ func newClient(ctx context.Context, mx []*net.MX, ports []int) (*smtp.Client, er
 				if j == len(ports)-1 {
 					return nil, err
 				}
-
+				zap.S().With(zap.Error(err)).Warnf("failure sending, trying one of next %d options", opts-pos)
 				continue
 			}
 
