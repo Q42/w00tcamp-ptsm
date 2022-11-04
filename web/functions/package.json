@@ -7,17 +7,23 @@
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "emulator": "npm run build && firebase emulators:start --only functions",
+    "watch": "tsc --watch"
   },
   "engines": {
     "node": "16"
   },
   "main": "lib/index.js",
   "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
     "firebase-admin": "^11.2.0",
-    "firebase-functions": "^4.0.2"
+    "firebase-functions": "^4.0.2",
+    "mobileconfig": "^2.4.0"
   },
   "devDependencies": {
+    "@types/express": "^4.17.14",
     "typescript": "^4.6.4"
   },
   "private": true

@@ -57,7 +57,8 @@ const drawer = ref(false);
         <v-divider></v-divider>
 
         <v-list density="compact" nav>
-          <v-list-item prepend-icon="mdi-cash-clock" title="Log out" @click="logout" />
+          <v-list-item prepend-icon="mdi-cog" title="Settings" to="/settings" />
+          <v-list-item prepend-icon="mdi-logout" title="Log out" @click="logout" />
         </v-list>
       </v-navigation-drawer>
 
