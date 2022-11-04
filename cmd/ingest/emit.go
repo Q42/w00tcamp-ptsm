@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	ports = []int{25, 2525, 587}
+	ports = []int{587, 2525, 25}
 )
 
 // copyright: https://github.com/nilslice/email/blob/master/email.go
