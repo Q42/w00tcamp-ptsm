@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	ImapAddr = ":993"
+	ImapDebug = 0
+	ImapAddr  = ":993"
 )
 
 func GetUnexportedField(field reflect.Value) interface{} {
@@ -35,7 +36,9 @@ func startImapServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Co
 	s := server.New(be)
 	s.Addr = ImapAddr // 143 is the insecure port
 	s.AllowInsecureAuth = true
-	s.Debug = os.Stderr
+	if ImapDebug > 0 {
+		s.Debug = os.Stderr
+	}
 
 	s.EnableAuth(sasl.Plain, func(conn server.Conn) sasl.Server {
 		return sasl.NewPlainServer(func(identity, username, password string) error {
@@ -130,7 +133,9 @@ var _ net.Conn = debugConn{}
 // time limit; see SetDeadline and SetReadDeadline.
 func (l debugConn) Read(b []byte) (n int, err error) {
 	defer func() {
-		l.Logger.Info("read", zap.ByteString("bytes", b[0:n]), zap.Error(err))
+		if ImapDebug > 2 {
+			l.Logger.Debug("read", zap.ByteString("bytes", b[0:n]), zap.Error(err))
+		}
 	}()
 	return l.Conn.Read(b)
 }
@@ -140,7 +145,9 @@ func (l debugConn) Read(b []byte) (n int, err error) {
 // time limit; see SetDeadline and SetWriteDeadline.
 func (l debugConn) Write(b []byte) (n int, err error) {
 	defer func() {
-		l.Logger.Info("write", zap.ByteString("bytes", b[0:n]), zap.Error(err))
+		if ImapDebug > 2 {
+			l.Logger.Info("write", zap.ByteString("bytes", b[0:n]), zap.Error(err))
+		}
 	}()
 	return l.Conn.Write(b)
 }

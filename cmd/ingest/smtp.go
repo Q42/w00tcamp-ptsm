@@ -279,6 +279,7 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
 		return smtpd.Error{Code: 451, Message: fmt.Sprintf("Bad recipient address %q", recipientEmail)}
 	}
 
+	w.logger.Debug("User exists", zap.String("recipient", recipientEmail))
 	if err = os.MkdirAll(path.Join("mails", emailUserName(recipientEmail)), 0777); err != nil {
 		return errors.Wrap(err, "failed to make inbox")
 	}
@@ -297,7 +298,7 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
 			Recipients: []string{env.Sender},
 			Data: []byte(fmt.Sprintf("From: %s\r\n"+
 				"To: %s\r\n"+
-				"Subject: Bounced email\r\n"+
+				"Subject: E-mail requires payment\r\n"+
 				"Date: %s\r\n"+
 				"Message-ID: <0000000@localhost/>\r\n"+
 				"Content-Type: text/plain\r\n"+
@@ -312,23 +313,34 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
 
 	var mb backend.Mailbox
 	if isPaid {
-		mb, err = u.GetMailbox("INBOX")
+		mb, err = ensureMailbox(u, "INBOX", w.logger)
 	} else {
-		err = os.MkdirAll(path.Join("mails", emailUserName(recipientEmail), "UNPAID"), 0777)
-		if err == nil {
-			err = u.CreateMailbox("UNPAID")
-		}
-		if err == nil {
-			mb, err = u.GetMailbox("UNPAID")
-		}
-		if err != nil {
-			w.logger.Warn("Failed to create mailbox UNPAID", zap.String("source", recipientEmail), zap.Error(err))
-		}
+		mb, err = ensureMailbox(u, "UNPAID", w.logger)
 	}
 	if err != nil {
 		return err
 	}
 	return mb.CreateMessage(nil, time.Now(), envelopeLiteral{bytes.NewReader(env.Data), len(env.Data)})
+}
+
+func ensureMailbox(u backend.User, box string, logger *zap.Logger) (mb backend.Mailbox, err error) {
+	if box == "" {
+		return nil, os.MkdirAll(path.Join("mails", u.Username()), 0777)
+	}
+	err = os.MkdirAll(path.Join("mails", u.Username(), box), 0777)
+	if err == nil {
+		err = u.CreateMailbox(box)
+		if err.Error() == "Mailbox already exists" {
+			err = nil
+		}
+	}
+	if err == nil {
+		mb, err = u.GetMailbox(box)
+	}
+	if err != nil {
+		logger.Warn("Failed to create mailbox", zap.String("source", u.Username()), zap.Error(err), zap.String("mailbox", box))
+	}
+	return
 }
 
 // forward handles outbox

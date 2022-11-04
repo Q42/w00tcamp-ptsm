@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/chrj/smtpd"
+	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 var (
@@ -22,33 +24,32 @@ func (w wrap) emit(ctx context.Context, env smtpd.Envelope) error {
 	for _, r := range env.Recipients {
 		addr, err := mail.ParseAddress(r)
 		if err != nil {
-			continue
+			return errors.Wrap(err, "failed to parse address")
 		}
 
 		host := strings.Split(addr.Address, "@")[1]
 		addrs, err := net.DefaultResolver.LookupMX(ctx, host)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to lookup mx")
 		}
 
 		c, err := newClient(ctx, addrs, ports)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to create outgoing connection")
 		}
 
 		err = send(env, c, r)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to send email")
 		}
-
 	}
-
 	return nil
 }
 
 func newClient(ctx context.Context, mx []*net.MX, ports []int) (*smtp.Client, error) {
 	for i := range mx {
 		for j := range ports {
+			zap.S().Debugf("mx=%s port=%s", mx[i], ports[j])
 			server := strings.TrimSuffix(mx[i].Host, ".")
 			hostPort := fmt.Sprintf("%s:%d", server, ports[j])
 			var client *smtp.Client
