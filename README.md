@@ -12,11 +12,18 @@ Stop spam &amp; get your deserved financial reward for reading mails. Let sender
 ## Local running
 
 ```bash
-export SERVER=www.mydom.com
-export CORP=mycorp
-export COUNTRY=US
+export SERVER=ptsm.hermanbanken.nl
+export CORP=hermanbanken.nl
+export COUNTRY=NL
 openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 -keyout private.pem -out certificate.crt -subj "/CN=$SERVER/O=$CORP/C=$COUNTRY"
 
 make build
-./bin/ingest-darwin-arm64 -local_cert certificate.crt -local_key private.pem -hostname mail.mydom.com
+./bin/ingest-darwin-arm64 -local_cert certificate.crt -local_key private.pem -hostname ptsm.hermanbanken.nl
 ```
+
+## PTSM.org
+Hosted mailbox/forwarder
+Add credit. Pay 0.001$ per forwarded email.
+Set rules, domains, whitelists, etc.
+Bounces for 404?
+Careful with displaying emails. XSS, embedded url loading. Tracking pixels.

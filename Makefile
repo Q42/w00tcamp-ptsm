@@ -13,3 +13,9 @@ build: bin/ingest-darwin-amd64 bin/ingest-darwin-arm64 bin/ingest-linux-amd64
 
 clean:
 	rm -rf bin/*
+
+.PHONY: setup-ko-gcr
+setup-ko-gcr:
+	git clone git@github.com:GoogleCloudPlatform/cloud-builders-community.git --depth=1;
+	gcloud builds submit --project=$$GCLOUD_PROJECT ./cloud-builders-community/ko --config=./cloud-builders-community/ko/cloudbuild.yaml
+	rm -rf ./cloud-builders-community
