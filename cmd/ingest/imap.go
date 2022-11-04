@@ -12,7 +12,6 @@ import (
 	"unsafe"
 
 	"github.com/emersion/go-imap"
-	"github.com/emersion/go-imap/backend/memory"
 	"github.com/emersion/go-imap/server"
 	"github.com/emersion/go-sasl"
 	"go.uber.org/zap"
@@ -27,7 +26,11 @@ func GetUnexportedField(field reflect.Value) interface{} {
 }
 
 func startImapServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Config) {
-	be := memory.New()
+	be, err := FirestoreBackend(ctx)
+	if err != nil {
+		zap.L().Fatal(err.Error(), zap.Error(err))
+	}
+
 	// Create a new server
 	s := server.New(be)
 	s.Addr = ImapAddr // 143 is the insecure port

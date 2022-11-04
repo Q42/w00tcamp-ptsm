@@ -8,19 +8,40 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
-	firebase "firebase.google.com/go/v4"
+	"github.com/chrj/smtpd"
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/backend"
 	"github.com/emersion/go-imap/backend/memory"
+	"go.uber.org/zap"
 	"google.golang.org/api/iterator"
 )
 
-func FirestoreBackend(ctx context.Context) (backend.Backend, error) {
-	app, err := firebase.NewApp(ctx, nil)
+func FirestoreAuthenticator(ctx context.Context, logger *zap.Logger, peer smtpd.Peer, username, password string) error {
+	db, err := firestore.NewClient(ctx, firestore.DetectProjectID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	db, err := app.Firestore(ctx)
+	it := db.Collection("mailboxes").Doc(username).Collection("appkeys").Documents(ctx)
+	for {
+		doc, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		data := doc.Data()
+		if data["version"] == "v1" && data["key"] == password {
+			logger.Warn("Logged in", zap.String("username", username))
+			return nil
+		}
+	}
+	logger.Warn("Login not found", zap.String("username", username))
+	return fmt.Errorf("not found")
+}
+
+func FirestoreBackend(ctx context.Context) (backend.Backend, error) {
+	db, err := firestore.NewClient(ctx, firestore.DetectProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +53,7 @@ func (b firestoreBackend) FindUser(webLogin string) (mail string, err error) {
 	if err != nil {
 		return "", err
 	}
+	zap.L().Info("Found user", zap.String("mail", doc.Ref.ID))
 	return doc.Ref.ID, nil
 }
 
@@ -62,7 +84,7 @@ func (b firestoreBackend) Login(connInfo *imap.ConnInfo, username string, passwo
 			if false {
 				// TODO implement full spec
 				return firestoreUserBackend{b.db, b.ctx, username, map[string][]*memory.Message{
-					"INBOX": []*memory.Message{
+					"INBOX": {
 						{
 							Uid:   6,
 							Date:  time.Now(),

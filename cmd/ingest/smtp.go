@@ -42,6 +42,8 @@ func startSmtpServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Co
 			SenderChecker:     w.senderChecker,
 			RecipientChecker:  w.recipientChecker,
 			Handler:           w.mailHandler,
+			Authenticator:     w.authenticator,
+			AllowAnonymous:    true,
 		}
 
 		switch listen.protocol {
@@ -185,6 +187,10 @@ func (w wrap) recipientChecker(peer smtpd.Peer, addr string) error {
 		With(zap.String("sender_address", addr), zap.Any("peer", peer.Addr)).
 		Warn("recipient address not allowed by allowed_recipients pattern")
 	return smtpd.Error{Code: 451, Message: "Bad recipient address"}
+}
+
+func (w wrap) authenticator(peer smtpd.Peer, username, password string) error {
+	return FirestoreAuthenticator(context.Background(), w.logger, peer, username, password)
 }
 
 func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) error {

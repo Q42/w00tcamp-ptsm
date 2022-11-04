@@ -16,8 +16,9 @@ import (
 	"strings"
 	"text/template"
 
-	firebase "firebase.google.com/go/v4"
-	"firebase.google.com/go/v4/auth"
+	"cloud.google.com/go/firestore"
+	firebase "firebase.google.com/go"
+	"firebase.google.com/go/auth"
 	cms "github.com/github/smimesign/ietf-cms"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -38,9 +39,26 @@ type provisionServer struct {
 func NewProvisionServer() (*provisionServer, error) {
 	s := &provisionServer{mux.NewRouter(), nil}
 	s.HandleFunc("/provisiontest", func(w http.ResponseWriter, r *http.Request) {
+		db, err := firestore.NewClient(r.Context(), firestore.DetectProjectID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_, err = firestoreBackend{db, r.Context()}.FindUser("herman@q42.nl")
+		if err != nil {
+			http.Error(w, "you dummy "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = firestoreBackend{db, r.Context()}.AddAppKey("herman@ptsm.q42.com", "foobar")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", "attachment;filename=imap.mobileconfig")
-		err := writeMobileProvision(w, s.TLSConfig, "herman@ptsm.q42.com", "foobar")
+		err = writeMobileProvision(w, s.TLSConfig, "herman@ptsm.q42.com", "foobar")
 		if err != nil {
 			w.Header().Del("Content-Type")
 			w.Header().Del("Content-Disposition")

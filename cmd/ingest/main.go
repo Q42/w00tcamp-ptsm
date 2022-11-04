@@ -12,6 +12,7 @@ import (
 
 func main() {
 	logger, _ := zap.NewDevelopment(zap.IncreaseLevel(zap.DebugLevel))
+	zap.ReplaceGlobals(logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -39,4 +40,3 @@ func handleSignals(log *zap.Logger) {
 	log.With(zap.Stringer("signal", sig)).
 		Info("shutting down in response to received signal")
 }
-
