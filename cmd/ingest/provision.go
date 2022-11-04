@@ -102,7 +102,7 @@ func NewProvisionServer(logger *zap.Logger) (*provisionServer, error) {
 			return
 		}
 
-		err = firestoreBackend{db, r.Context()}.AddAppKey("herman@ptsm.q42.com", "foobar")
+		err = firestoreBackend{db, r.Context()}.AddAppKey("herman@pay2mail.me", "foobar")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -110,7 +110,7 @@ func NewProvisionServer(logger *zap.Logger) (*provisionServer, error) {
 
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", "attachment;filename=imap.mobileconfig")
-		err = writeMobileProvision(w, s.TLSConfig, "herman@ptsm.q42.com", "foobar")
+		err = writeMobileProvision(w, s.TLSConfig, "herman@pay2mail.me", "foobar")
 		if err != nil {
 			w.Header().Del("Content-Type")
 			w.Header().Del("Content-Disposition")
@@ -208,10 +208,9 @@ func writeMobileProvision(w io.Writer, tlsConfig *tls.Config, email, password st
 		},
 		"Smtp": map[string]interface{}{
 			"Hostname": *hostName,
-			"Port":     25,
+			"Port":     465,
 			"Secure":   true,
 			"Username": email,
-			"Password": password,
 		},
 	})
 	if err != nil {
