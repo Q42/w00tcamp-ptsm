@@ -209,12 +209,15 @@ func (w wrap) authenticator(peer smtpd.Peer, username, password string) error {
 }
 
 func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) (err error) {
+	logger := w.logger.With(zap.String("from", env.Sender), zap.Strings("to", env.Recipients), zap.String("uuid", generateUUID()))
 	defer func() {
 		if err != nil {
-			w.logger.Error(errors.Wrap(err, "failed to handle mail").Error(), zap.Error(err))
+			logger.Error(errors.Wrap(err, "failed to handle mail").Error(), zap.Error(err))
 			if !errors.Is(err, smtpd.Error{}) {
 				err = smtpd.Error{Code: 500, Message: "Internal server error"}
 			}
+		} else {
+			logger.Info("handled mail successfully")
 		}
 	}()
 	env.AddReceivedLine(peer)
@@ -222,9 +225,8 @@ func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) (err error) {
 	if addr, ok := peer.Addr.(*net.TCPAddr); ok {
 		peerIP = addr.IP.String()
 	}
-
-	logger := w.logger.With(zap.String("from", env.Sender), zap.Strings("to", env.Recipients), zap.String("peer", peerIP), zap.String("uuid", generateUUID()))
-	logger.With(zap.String("data", string(env.Data))).Info("Handling mail")
+	logger = logger.With(zap.String("peer", peerIP))
+	logger.With(zap.String("data", string(env.Data))).Info("handling mail")
 
 	// Abuse mails are only logged
 	if strings.HasPrefix(env.Recipients[0], "abuse@") {
@@ -235,29 +237,31 @@ func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) (err error) {
 	// Sender on this server
 	if peer.Username != "" {
 		return w.forward(env)
-	} else {
-		var errs []error
-		// Recipients on this server
-		for _, rec := range env.Recipients {
-			addr, err := mail.ParseAddress(rec)
-			if err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			if strings.HasSuffix(addr.Address, *domain) {
-				if err := w.deliver(addr.Address, env); err != nil {
-					errs = append(errs, errors.Wrap(err, "deliver failed"))
-				}
-			} else {
-				// Error because we are not an open relay:
-				// you must either be known by this server, or send to someone on this server
-				errs = append(errs, smtpd.Error{Code: 451, Message: "Bad recipient address. We are no open relay."})
-			}
+	}
+
+	// Recipients on this server
+	var errs []error
+	for _, rec := range env.Recipients {
+		addr, err := mail.ParseAddress(rec)
+		if err != nil {
+			errs = append(errs, err)
+			logger.Warn("failed to parse recipient", zap.String("recipient", rec))
+			continue
 		}
-		if len(errs) > 0 {
-			return errs[0]
+		if strings.HasSuffix(addr.Address, *domain) {
+			if err := w.deliver(addr.Address, env); err != nil {
+				errs = append(errs, errors.Wrap(err, "deliver failed"))
+			}
+		} else {
+			// Error because we are not an open relay:
+			// you must either be known by this server, or send to someone on this server
+			errs = append(errs, smtpd.Error{Code: 451, Message: "Bad recipient address. We are no open relay."})
 		}
 	}
+	if len(errs) > 0 {
+		return errs[0]
+	}
+
 	return nil
 }
 
@@ -310,9 +314,16 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
 	if isPaid {
 		mb, err = u.GetMailbox("INBOX")
 	} else {
-		err = u.CreateMailbox("UNPAID")
-		w.logger.Warn("Failed to create mailbox UNPAID", zap.String("source", recipientEmail), zap.Error(err))
-		mb, err = u.GetMailbox("UNPAID")
+		err = os.MkdirAll(path.Join("mails", emailUserName(recipientEmail), "UNPAID"), 0777)
+		if err == nil {
+			err = u.CreateMailbox("UNPAID")
+		}
+		if err == nil {
+			mb, err = u.GetMailbox("UNPAID")
+		}
+		if err != nil {
+			w.logger.Warn("Failed to create mailbox UNPAID", zap.String("source", recipientEmail), zap.Error(err))
+		}
 	}
 	if err != nil {
 		return err
