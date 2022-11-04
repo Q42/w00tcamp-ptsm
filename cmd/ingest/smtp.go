@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -24,8 +23,6 @@ type wrap struct {
 }
 
 func startSmtpServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Config) {
-	flagset.Parse(os.Args[1:])
-
 	var servers []*smtpd.Server
 	for _, listen := range []protoAddr{{"starttls", ":25"}, {"starttls", ":587"}, {"tls", ":465"}} {
 		var err error
@@ -259,6 +256,7 @@ func getTLSConfig(logger *zap.Logger) *tls.Config {
 	}
 
 	return &tls.Config{
+		ServerName:               *hostName,
 		PreferServerCipherSuites: true,
 		MinVersion:               tls.VersionTLS12,
 		CipherSuites:             tlsCipherSuites,

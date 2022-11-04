@@ -9,5 +9,23 @@ gcloud compute instances create dummy --project=$GCLOUD_PROJECT \
 gcloud compute --project=$GCLOUD_PROJECT firewall-rules create mail --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:25,tcp:143,tcp:456,tcp:587,tcp:993 --source-ranges=0.0.0.0/0 --target-tags=smtp
 gcloud compute --project=$GCLOUD_PROJECT firewall-rules create mailv6 --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:25,tcp:143,tcp:456,tcp:587,tcp:993 --source-ranges=0::0/0 --target-tags=smtp
 
+# make clean build scp
+# setup
+sudo apt-get install nginx certbot python3-certbot-nginx
+
+# start
+sudo ./ingest-linux-amd64 -local_cert /etc/letsencrypt/live/mail.ptsm.q42.com/fullchain.pem --local_key /etc/letsencrypt/live/mail.ptsm.q42.com/privkey.pem -hostname mail.ptsm.q42.com -local_forcetls
+curl https://mail.ptsm.q42.com # requests cert
+
+openssl s_client -showcerts -connect mail.ptsm.q42.com:993 -servername mail.ptsm.q42.com
+openssl s_client -starttls smtp -showcerts -connect mail.ptsm.q42.com:25 -servername mail.ptsm.q42.com
+# DANE (https://blog.zimbra.com/2022/04/zimbra-skillz-enable-dane-verification-for-incoming-email-in-zimbra/)
+printf '_25._tcp.%s. IN TLSA 3 1 1 %s\n' \
+        mail.ptsm.q42.com \
+        $(openssl x509 -in /etc/autocert/live/mail.ptsm.q42.com -noout -pubkey |
+            openssl pkey -pubin -outform DER |
+            openssl dgst -sha256 -binary |
+            hexdump -ve '/1 "%02x"')
+
 # TODO ko
 # TODO https://cloud.google.com/compute/docs/containers/deploying-containers
