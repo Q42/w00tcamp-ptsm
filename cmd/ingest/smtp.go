@@ -225,6 +225,12 @@ func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) (err error) {
 	logger := w.logger.With(zap.String("from", env.Sender), zap.Strings("to", env.Recipients), zap.String("peer", peerIP), zap.String("uuid", generateUUID()))
 	logger.With(zap.String("data", string(env.Data))).Info("Handling mail")
 
+	// Abuse mails are only logged
+	if strings.HasPrefix(env.Recipients[0], "abuse@") {
+		w.logger.Warn("Abuse email report")
+		return smtpd.Error{Code: 200, Message: "Received"}
+	}
+
 	// Sender on this server
 	if peer.Username != "" {
 		return w.forward(env)

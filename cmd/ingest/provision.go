@@ -10,7 +10,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"embed"
+	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -23,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"golang.org/x/net/context"
 )
 
@@ -36,8 +39,57 @@ type provisionServer struct {
 	TLSConfig *tls.Config
 }
 
-func NewProvisionServer() (*provisionServer, error) {
+func DKIM(c *tls.Config) string {
+	if c == nil {
+		return ""
+	}
+	cert, err := c.GetCertificate(&tls.ClientHelloInfo{ServerName: *hostName})
+	if err != nil {
+		return ""
+	}
+	var der []byte
+	var k = ""
+	switch pk := cert.PrivateKey.(type) {
+	case *rsa.PrivateKey:
+		der, err = x509.MarshalPKIXPublicKey(&pk.PublicKey)
+		k = "rsa"
+	case *ed25519.PrivateKey:
+		der, err = x509.MarshalPKIXPublicKey(pk.Public())
+		k = "ed25519"
+	}
+	if len(der) == 0 || err != nil {
+		return ""
+	}
+	p := base64.StdEncoding.EncodeToString(der)
+	out := fmt.Sprintf("\"v=DKIM1; k=%s; p=%s;\"", k, p)
+
+	// TXT max length is 255, clients concat multiple TXT (support.google.com/a/answer/1161309)
+	for i := 255; i < len(out); i += 255 {
+		out = out[0:i] + "\" \"" + out[i:]
+		i += len("\" \"")
+	}
+	return out
+}
+
+func NewProvisionServer(logger *zap.Logger) (*provisionServer, error) {
 	s := &provisionServer{mux.NewRouter(), nil}
+
+	s.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		view := template.Must(template.ParseFS(templateMobileConfig, "resources/config.html"))
+		dkim, _ := dkimOpts(s.TLSConfig, logger)
+		data := map[string]interface{}{
+			"Domain": *domain,
+			"DMARC":  fmt.Sprintf("_dmarc.%s TXT v=DMARC1; p=reject; pct=100; rua=mailto:abuse@%s; ruf=mailto:abuse@%s; aspf=r; adkim=r; sp=none;", *domain, *domain, *domain),
+			"DKIM":   fmt.Sprintf("%s._domainkey TXT %s", dkim.Selector, DKIM(s.TLSConfig)),
+			"SPF":    fmt.Sprintf(". TXT v=spf1 a mx -all"),
+		}
+
+		err := view.ExecuteTemplate(w, "config.html", data)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
 	s.HandleFunc("/provisiontest", func(w http.ResponseWriter, r *http.Request) {
 		db, err := firestore.NewClient(r.Context(), firestore.DetectProjectID)
 		if err != nil {
@@ -66,6 +118,7 @@ func NewProvisionServer() (*provisionServer, error) {
 			return
 		}
 	})
+
 	s.HandleFunc("/provision", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		id_token := strings.TrimPrefix(strings.TrimPrefix(r.Form.Get("authorization"), "Bearer"), "bearer")

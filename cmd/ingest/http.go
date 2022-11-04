@@ -13,7 +13,7 @@ import (
 )
 
 func startHttpServer(ctx context.Context, logger *zap.Logger) (tlsConfig *tls.Config, err error) {
-	r, err := NewProvisionServer()
+	r, err := NewProvisionServer(logger)
 	if err != nil {
 		return nil, err
 	}
