@@ -5,7 +5,9 @@ gcloud compute instances create dummy --project=$GCLOUD_PROJECT \
     --zone=europe-west1-b --machine-type=e2-small --tags=smtp \
     --serviceAccount=ptsm-vm@$GCLOUD_PROJECT.iam.gserviceaccount.com \
     --create-disk=auto-delete=yes,boot=yes,device-name=dummy,image=projects/debian-cloud/global/images/debian-11-bullseye-v20220920,mode=rw,size=10,type=projects/$GCLOUD_PROJECT/zones/us-central1-a/diskTypes/pd-balanced \
-    --no-shielded-secure-boot --shielded-vtpm --shielded-integrity-monitoring --reservation-affinity=any
+    --no-shielded-secure-boot --shielded-vtpm --shielded-integrity-monitoring --reservation-affinity=any \
+    --public-ptr-domain=pay2mail.me
+# PTR record is required: https://cloud.google.com/compute/docs/instances/create-ptr-record
 
 gcloud compute --project=$GCLOUD_PROJECT firewall-rules create mail --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:25,tcp:143,tcp:456,tcp:587,tcp:993 --source-ranges=0.0.0.0/0 --target-tags=smtp
 gcloud compute --project=$GCLOUD_PROJECT firewall-rules create mailv6 --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:25,tcp:143,tcp:456,tcp:587,tcp:993 --source-ranges=0::0/0 --target-tags=smtp
