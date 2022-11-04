@@ -27,3 +27,7 @@ Add credit. Pay 0.001$ per forwarded email.
 Set rules, domains, whitelists, etc.
 Bounces for 404?
 Careful with displaying emails. XSS, embedded url loading. Tracking pixels.
+
+## IMAP/SMTP authentication using OAuth
+[XOAUTH2](https://developers.google.com/gmail/imap/xoauth2-protocol) can be used with
+IMAP and SMTP using the `AUTHENTICATE` command ([RFC 3501§6.2.2](https://www.rfc-editor.org/rfc/rfc3501#section-6.2.2)).

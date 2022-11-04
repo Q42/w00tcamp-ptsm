@@ -19,7 +19,9 @@ func main() {
 		cancel()
 	}()
 
-	go startMailServers(ctx, logger)
+	tlsConfig := getTLSConfig(logger)
+	go startSmtpServers(ctx, logger, tlsConfig)
+	go startImapServers(ctx, logger, tlsConfig)
 	<-ctx.Done()
 }
 

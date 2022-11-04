@@ -23,7 +23,7 @@ type wrap struct {
 	logger *zap.Logger
 }
 
-func startMailServers(ctx context.Context, logger *zap.Logger) {
+func startSmtpServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Config) {
 	flagset.Parse(os.Args[1:])
 
 	var servers []*smtpd.Server
@@ -53,14 +53,14 @@ func startMailServers(ctx context.Context, logger *zap.Logger) {
 			lsnr, err = net.Listen("tcp", listen.address)
 
 		case "starttls":
-			server.TLSConfig = getTLSConfig(logger)
+			server.TLSConfig = tlsConfig
 			server.ForceTLS = *localForceTLS
 
 			logger.Info("listening on address (STARTTLS)")
 			lsnr, err = net.Listen("tcp", listen.address)
 
 		case "tls":
-			server.TLSConfig = getTLSConfig(logger)
+			server.TLSConfig = tlsConfig
 
 			logger.Info("listening on address (TLS)")
 			lsnr, err = tls.Listen("tcp", listen.address, server.TLSConfig)
