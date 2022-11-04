@@ -14,6 +14,8 @@ import (
 	"github.com/emersion/go-imap/backend/memory"
 	"go.uber.org/zap"
 	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func FirestoreAuthenticator(ctx context.Context, logger *zap.Logger, peer smtpd.Peer, username, password string) error {
@@ -32,7 +34,7 @@ func FirestoreAuthenticator(ctx context.Context, logger *zap.Logger, peer smtpd.
 		}
 		data := doc.Data()
 		if data["version"] == "v1" && data["key"] == password {
-			logger.Warn("Logged in", zap.String("username", username))
+			logger.Info("Logged in", zap.String("username", username))
 			return nil
 		}
 	}
@@ -40,10 +42,10 @@ func FirestoreAuthenticator(ctx context.Context, logger *zap.Logger, peer smtpd.
 	return fmt.Errorf("not found")
 }
 
-func FirestoreBackend(ctx context.Context) (backend.Backend, error) {
+func FirestoreBackend(ctx context.Context) (firestoreBackend, error) {
 	db, err := firestore.NewClient(ctx, firestore.DetectProjectID)
 	if err != nil {
-		return nil, err
+		return firestoreBackend{}, err
 	}
 	return firestoreBackend{db, ctx}, nil
 }
@@ -64,6 +66,17 @@ func (b firestoreBackend) AddAppKey(mail string, key string) (err error) {
 		"version": "v1",
 	})
 	return err
+}
+
+func (b firestoreBackend) Exists(mail string) (exists bool, err error) {
+	_, err = b.db.Collection("mailboxes").Doc(mail).Get(b.ctx)
+	if err == nil {
+		return true, nil
+	}
+	if status.Code(err) == codes.NotFound {
+		return false, nil
+	}
+	return false, err
 }
 
 type firestoreBackend struct {

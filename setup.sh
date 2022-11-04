@@ -16,8 +16,10 @@ gcloud projects add-iam-policy-binding $GCLOUD_PROJECT --project=$GCLOUD_PROJECT
 sudo apt-get install nginx certbot python3-certbot-nginx
 
 # start
-sudo ./ingest-linux-amd64 -local_cert /etc/letsencrypt/live/mail.ptsm.q42.com/fullchain.pem --local_key /etc/letsencrypt/live/mail.ptsm.q42.com/privkey.pem -hostname mail.ptsm.q42.com -local_forcetls
+sudo ./ingest-linux-amd64 -local_cert /etc/letsencrypt/live/mail.ptsm.q42.com/fullchain.pem --local_key /etc/letsencrypt/live/mail.ptsm.q42.com/privkey.pem -hostname mail.ptsm.q42.com -domain ptsm.q42.com -local_forcetls
 curl https://mail.ptsm.q42.com # requests cert
+sudo ./ingest-linux-amd64 -local_cert /etc/letsencrypt/live/mail.pay2mail.me/fullchain.pem --local_key /etc/letsencrypt/live/mail.pay2mail.me/privkey.pem -hostname mail.pay2mail.me -domain ptsm.q42.com -local_forcetls
+curl https://mail.pay2mail.me # requests cert
 
 openssl s_client -showcerts -connect mail.ptsm.q42.com:993 -servername mail.ptsm.q42.com
 openssl s_client -starttls smtp -showcerts -connect mail.ptsm.q42.com:25 -servername mail.ptsm.q42.com

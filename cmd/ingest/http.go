@@ -24,7 +24,36 @@ func startHttpServer(ctx context.Context, logger *zap.Logger) (tlsConfig *tls.Co
 		s.Shutdown(context.Background())
 	}()
 
+	c, err := makeTLSConfig(logger)
+	s.TLSConfig = c
+	r.TLSConfig = c
+	if err != nil {
+		return nil, err
+	}
+
+	// Start the server
+	go func() {
+		logger.Info("Starting HTTPS server on :443")
+		if err = s.ListenAndServeTLS("", ""); err != nil {
+			logger.Fatal(err.Error(), zap.Error(err))
+		}
+	}()
+
+	return &tls.Config{GetCertificate: c.GetCertificate}, err
+
+}
+
+func makeTLSConfig(logger *zap.Logger) (c *tls.Config, err error) {
+	// Load TLS certs from fixed files
+	if *localCert != "" && *localKey != "" {
+		logger.Info("Using configured certificate material")
+		c = &tls.Config{Certificates: []tls.Certificate{{}}}
+		c.Certificates[0], err = tls.LoadX509KeyPair(*localCert, *localKey)
+		return
+	}
+
 	// Automatically provision HTTPS using LetsEncrypt
+	logger.Info("Using autocert certificate material")
 	dataDir := "/etc/autocert/live/"
 	if err = os.MkdirAll(dataDir, 0644); err != nil {
 		return nil, err
@@ -39,17 +68,5 @@ func startHttpServer(ctx context.Context, logger *zap.Logger) (tlsConfig *tls.Co
 		},
 		Cache: autocert.DirCache(dataDir),
 	}
-	s.TLSConfig = m.TLSConfig()
-	r.TLSConfig = m.TLSConfig()
-
-	// Start the server
-	go func() {
-		logger.Info("Starting HTTPS server on :443")
-		if err = s.ListenAndServeTLS("", ""); err != nil {
-			logger.Fatal(err.Error(), zap.Error(err))
-		}
-	}()
-
-	return &tls.Config{GetCertificate: m.GetCertificate}, err
-
+	return m.TLSConfig(), nil
 }

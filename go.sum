@@ -72,6 +72,8 @@ github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAE
 github.com/Sirupsen/logrus v1.0.6 h1:HCAGQRk48dRVPA5Y+Yh0qdCSTzPOyU1tBJ7Q9YzotII=
 github.com/Sirupsen/logrus v1.0.6/go.mod h1:rmk17hk6i8ZSAJkSDa7nOxamrG+SP4P0mm+DAvExv4U=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
+github.com/bcampbell/tameimap v0.0.0-20220125234308-d3065ffd8c9b h1:A7PxJx5gGStoUl2juxsfOC6DUtiz+/ihvbiutO9HzlM=
+github.com/bcampbell/tameimap v0.0.0-20220125234308-d3065ffd8c9b/go.mod h1:Qmy09QOD+EquilCurstDSK8Tz3L2MCYAUX3Q1x8NJ8E=
 github.com/benbjohnson/clock v1.1.0 h1:Q92kusRqC1XV2MjkWETPvjJVqKetz1OzxZB7mHJLju8=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/certifi/gocertifi v0.0.0-20180118203423-deb3ae2ef261/go.mod h1:GJKEexRPVJrBSOjoqN5VNOIKJ5Q3RViH6eu3puDRwx4=
@@ -102,6 +104,8 @@ github.com/emersion/go-imap v1.2.1/go.mod h1:Qlx1FSx2FTxjnjWpIlVNEuX+ylerZQNFE5N
 github.com/emersion/go-message v0.11.2/go.mod h1:C4jnca5HOTo4bGN9YdqNQM9sITuT3Y0K6bSUw9RklvY=
 github.com/emersion/go-message v0.15.0 h1:urgKGqt2JAc9NFJcgncQcohHdiYb803YTH9OQwHBHIY=
 github.com/emersion/go-message v0.15.0/go.mod h1:wQUEfE+38+7EW8p8aZ96ptg6bAb1iwdgej19uXASlE4=
+github.com/emersion/go-message v0.16.0 h1:uZLz8ClLv3V5fSFF/fFdW9jXjrZkXIpE1Fn8fKx7pO4=
+github.com/emersion/go-message v0.16.0/go.mod h1:pDJDgf/xeUIF+eicT6B/hPX/ZbEorKkUMPOxrPVG2eQ=
 github.com/emersion/go-milter v0.3.3/go.mod h1:ablHK0pbLB83kMFBznp/Rj8aV+Kc3jw8cxzzmCNLIOY=
 github.com/emersion/go-msgauth v0.6.6 h1:buv5lL8v/3v4RpHnQFS2IPhE3nxSRX+AxnrEJbDbHhA=
 github.com/emersion/go-msgauth v0.6.6/go.mod h1:A+/zaz9bzukLM6tRWRgJ3BdrBi+TFKTvQ3fGMFOI9SM=

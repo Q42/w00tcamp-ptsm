@@ -10,6 +10,8 @@ require (
 	github.com/chrj/smtpd v0.3.1
 	github.com/docker/swarmkit v1.12.0
 	github.com/emersion/go-imap v1.2.1
+	github.com/emersion/go-message v0.16.0
+	github.com/emersion/go-msgauth v0.6.6
 	github.com/emersion/go-sasl v0.0.0-20200509203442-7bfe0ed36a21
 	github.com/github/smimesign v0.2.0
 	github.com/google/uuid v1.3.0
@@ -22,6 +24,7 @@ require (
 	golang.org/x/crypto v0.1.0
 	golang.org/x/net v0.1.0
 	google.golang.org/api v0.96.0
+	google.golang.org/grpc v1.50.1
 )
 
 require (
@@ -31,8 +34,7 @@ require (
 	cloud.google.com/go/storage v1.26.0 // indirect
 	firebase.google.com/go/v4 v4.9.0 // indirect
 	github.com/Sirupsen/logrus v1.0.6 // indirect
-	github.com/emersion/go-message v0.15.0 // indirect
-	github.com/emersion/go-msgauth v0.6.6 // indirect
+	github.com/bcampbell/tameimap v0.0.0-20220125234308-d3065ffd8c9b // indirect
 	github.com/emersion/go-textwrapper v0.0.0-20200911093747-65d896831594 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -50,7 +52,6 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/appengine/v2 v2.0.2 // indirect
 	google.golang.org/genproto v0.0.0-20220810155839-1856144b1d9c // indirect
-	google.golang.org/grpc v1.50.1 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect

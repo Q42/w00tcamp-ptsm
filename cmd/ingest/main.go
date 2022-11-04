@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/hex"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/emersion/go-msgauth/dkim"
 	"go.uber.org/zap"
 )
 
@@ -26,9 +29,32 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go startSmtpServers(ctx, logger.Named("smtp"), tlsConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go startSmtpServers(ctx, logger.Named("smtp"), tlsConfig, signer(tlsConfig, logger))
 	go startImapServers(ctx, logger.Named("imap"), tlsConfig)
 	<-ctx.Done()
+}
+
+func signer(c *tls.Config, logger *zap.Logger) func() (*dkim.Signer, error) {
+	return func() (*dkim.Signer, error) {
+		cert, err := c.GetCertificate(&tls.ClientHelloInfo{ServerName: *hostName})
+		if err != nil {
+			return nil, err
+		}
+		if dkimSelector == nil || *dkimSelector == "" {
+			sig := hex.EncodeToString(cert.Leaf.Signature)[0:10]
+			dkimSelector = &sig
+			logger.Sugar().Infof("Using generated DKIM selector %q for domain %q", *dkimSelector, *domain)
+		}
+		return dkim.NewSigner(&dkim.SignOptions{
+			Signer:   asSigner(cert.PrivateKey),
+			Domain:   *domain,
+			Selector: *dkimSelector,
+		})
+	}
 }
 
 func handleSignals(log *zap.Logger) {
