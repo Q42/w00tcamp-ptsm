@@ -311,7 +311,7 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) (err error) {
 			}
 
 			uuid := uuid.NewRandom().String()
-			err = w.fb.QuarantineEmail(recipientEmail, fmt.Sprintf("%d-%s", createdMail.Uid, uuid), &env)
+			err = w.fb.QuarantineEmail(recipientEmail, fmt.Sprintf("%d-%s", createdMail.Uid, uuid), env)
 			if err != nil {
 				w.logger.Error("Failed to quarantine email at firestore", zap.String("source", env.Sender), zap.Error(err))
 				return

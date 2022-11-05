@@ -109,8 +109,8 @@ func (b firestoreBackend) Login(connInfo *imap.ConnInfo, username string, passwo
 	return nil, backend.ErrInvalidCredentials
 }
 
-func (b firestoreBackend) QuarantineEmail(receipientEmail string, id string, env *smtpd.Envelope) (err error) {
-	data := map[string]interface{}{"sender": env.Sender, "date": time.Now()}
+func (b firestoreBackend) QuarantineEmail(receipientEmail string, id string, env smtpd.Envelope) (err error) {
+	data := map[string]interface{}{"sender": env.Sender, "date": time.Now(), "subject": mustGetSubject(env)}
 	if utf8.ValidString(string(env.Data)) {
 		data["data"] = string(env.Data)
 	}
