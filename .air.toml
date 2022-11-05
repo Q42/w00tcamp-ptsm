@@ -1,0 +1,14 @@
+# Working directory
+# . or absolute path, please note that the directories following must be under root.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# Just plain old shell command. You could use `make` as well.
+cmd = "go build -o ./tmp/ingest ./cmd/ingest"
+
+# Binary file yields from `cmd`.
+bin = "tmp/ingest"
+
+# Customize binary, can setup environment variables when run your app.
+full_bin = "cd .. && w00tcamp-ptsm/tmp/ingest -hostname mail.pay2mail.me -domain pay2mail.me -local_forcetls"

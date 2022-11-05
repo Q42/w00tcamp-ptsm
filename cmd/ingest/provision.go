@@ -31,7 +31,7 @@ import (
 
 var (
 	//go:embed resources
-	templateMobileConfig embed.FS
+	templateResources embed.FS
 )
 
 type provisionServer struct {
@@ -75,7 +75,7 @@ func NewProvisionServer(logger *zap.Logger) (*provisionServer, error) {
 	s := &provisionServer{mux.NewRouter(), nil}
 
 	s.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		view := template.Must(template.ParseFS(templateMobileConfig, "resources/config.html"))
+		view := template.Must(template.ParseFS(templateResources, "resources/config.html"))
 		dkim, _ := dkimOpts(s.TLSConfig, logger)
 		data := map[string]interface{}{
 			"Domain": *domain,
@@ -187,7 +187,7 @@ func writeMobileProvision(w io.Writer, tlsConfig *tls.Config, email, password st
 		}
 	}
 	cmsWriter := signedWriter{bytes.NewBuffer(nil), certs, asSigner(cert.PrivateKey)}
-	view := template.Must(template.ParseFS(templateMobileConfig, "resources/imap.mobileconfig.xml"))
+	view := template.Must(template.ParseFS(templateResources, "resources/imap.mobileconfig.xml"))
 	err = view.ExecuteTemplate(cmsWriter, "imap.mobileconfig.xml", map[string]interface{}{
 		"AccountDescription": email,
 		"AccountName":        email,

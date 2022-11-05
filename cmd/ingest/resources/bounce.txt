@@ -1,0 +1,16 @@
+From: {{.From}}
+To: {{.To}}
+Reply-To: {{.ReplyTo}}
+Subject: [E-mail requires payment] {{.OriginalSubject}}
+Date: {{.Date}}
+Message-ID: <{{.Uid}}@bounces.{{.Domain}}/>
+Content-Type: text/plain
+
+You need to pay first. The recipients {{.Recipients}} value their time, so to have them receive the mail you sent - of {{.MailSize}} - costs you {{.Price}}.
+Pay here to deliver this mail:
+{{.PaymentLink}}
+
+Kind regards,
+Pay2mail.me team
+
+PS. Do you also value your time, and like to be compensated for reading mails? Sign up at https://pay2mail.me (or host your own server)!

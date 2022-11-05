@@ -36,6 +36,7 @@ require (
 	cloud.google.com/go/storage v1.26.0 // indirect
 	firebase.google.com/go/v4 v4.9.0 // indirect
 	github.com/Sirupsen/logrus v1.0.6 // indirect
+	github.com/cosmtrek/air v1.40.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emersion/go-textwrapper v0.0.0-20200911093747-65d896831594 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect

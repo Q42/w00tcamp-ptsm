@@ -35,3 +35,6 @@ IMAP and SMTP using the `AUTHENTICATE` command ([RFC 3501§6.2.2](https://www.rf
 Ref: [IMAP from local file-system](https://github.com/bcampbell/tameimap) using emersion/go-imap.
 
 [LearnDMARC](https://www.learndmarc.com/)
+[Fast development with VS Code Remote Code Server](https://github.com/coder/code-server)
+[`gcloud compute config-ssh --project ptsm-2022`](https://learn.canceridc.dev/cookbook/virtual-machines/using-vs-code-with-gcp-vms)
+[Air live reloading: `curl -sSfL https://raw.githubusercontent.com/cosmtrek/air/master/install.sh | sh -s`](https://github.com/cosmtrek/air)
