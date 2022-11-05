@@ -18,7 +18,7 @@ func startHttpServer(ctx context.Context, logger *zap.Logger) (tlsConfig *tls.Co
 		return nil, err
 	}
 
-	s := http.Server{Addr: ":443", Handler: cors.Default().Handler(r)}
+	s := http.Server{Addr: ":443", Handler: cors.Default().Handler(r), ErrorLog: zap.NewStdLog(logger)}
 	go func() {
 		<-ctx.Done()
 		s.Shutdown(context.Background())

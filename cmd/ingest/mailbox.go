@@ -43,6 +43,21 @@ func (m *loggingBackendUser) GetMailbox(name string) (backend.Mailbox, error) {
 func (m *loggingBackendMailbox) Info() (out *imap.MailboxInfo, err error) {
 	defer func() {
 		m.Logger.Info("Info")
+		switch m.Name() {
+		case "Sent":
+			out.Attributes = append(out.Attributes, imap.SentAttr)
+		case "Drafts":
+			out.Attributes = append(out.Attributes, imap.DraftsAttr)
+		case "Junk":
+			out.Attributes = append(out.Attributes, imap.JunkAttr)
+		case "All":
+			out.Attributes = append(out.Attributes, imap.AllAttr)
+		case "Trash":
+			out.Attributes = append(out.Attributes, imap.TrashAttr)
+		}
+		if m.Name() == "Sent" {
+			out.Attributes = append(out.Attributes, imap.SentAttr)
+		}
 	}()
 	return m.Mailbox.Info()
 }

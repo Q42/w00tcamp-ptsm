@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"github.com/bcampbell/tameimap/store"
 	"github.com/chrj/smtpd"
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/backend"
@@ -94,22 +96,13 @@ func (b firestoreBackend) Login(connInfo *imap.ConnInfo, username string, passwo
 		}
 		data := doc.Data()
 		if data["version"] == "v1" && data["key"] == password {
-			if false {
-				// TODO implement full spec
-				return firestoreUserBackend{b.db, b.ctx, username, map[string][]*memory.Message{
-					"INBOX": {
-						{
-							Uid:   6,
-							Date:  time.Now(),
-							Flags: []string{"\\Seen"},
-							Size:  uint32(len(body)),
-							Body:  []byte(body),
-						},
-					},
-				}}, nil
+			var u backend.User
+			u, err := store.NewUser(path.Join("mails", emailUserName(username)), emailUserName(username), password)
+			u = &loggingBackendUser{u, zap.L()}
+			if err != nil {
+				return nil, err
 			}
-			return memory.New().Login(connInfo, "username", "password")
-
+			return u, nil
 		}
 	}
 	return nil, backend.ErrInvalidCredentials
@@ -237,3 +230,21 @@ var body = "From: contact@example.org\r\n" +
 	"Content-Type: text/plain\r\n" +
 	"\r\n" +
 	"Hi there :)"
+
+func unused(b *firestoreBackend) {
+	var username string
+	// TODO implement full spec
+	_ = firestoreUserBackend{b.db, b.ctx, username, map[string][]*memory.Message{
+		"INBOX": {
+			{
+				Uid:   6,
+				Date:  time.Now(),
+				Flags: []string{"\\Seen"},
+				Size:  uint32(len(body)),
+				Body:  []byte(body),
+			},
+		},
+	}}
+
+	_, _ = memory.New().Login(nil, "username", "password")
+}

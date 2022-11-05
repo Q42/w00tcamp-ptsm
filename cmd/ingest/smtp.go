@@ -58,20 +58,20 @@ func startSmtpServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Co
 
 		switch listen.protocol {
 		case "":
-			logger.Info("listening on address")
+			logger.Sugar().Infof("listening on address %s", listen.address)
 			lsnr, err = net.Listen("tcp", listen.address)
 
 		case "starttls":
 			server.TLSConfig = tlsConfig
 			server.ForceTLS = *localForceTLS
 
-			logger.Info("listening on address (STARTTLS)")
+			logger.Sugar().Infof("listening on address %s (STARTTLS)", listen.address)
 			lsnr, err = net.Listen("tcp", listen.address)
 
 		case "tls":
 			server.TLSConfig = tlsConfig
 
-			logger.Info("listening on address (TLS)")
+			logger.Sugar().Infof("listening on address %s (TLS)", listen.address)
 			lsnr, err = tls.Listen("tcp", listen.address, server.TLSConfig)
 
 		default:
@@ -236,7 +236,7 @@ func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) (err error) {
 
 	// Sender on this server
 	if peer.Username != "" {
-		return w.forward(env)
+		return w.forward(peer, env)
 	}
 
 	// Recipients on this server
@@ -284,7 +284,9 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
 		return errors.Wrap(err, "failed to make inbox")
 	}
 
-	u, err := store.NewUser(path.Join("mails", emailUserName(recipientEmail)), emailUserName(recipientEmail), "")
+	var u backend.User
+	u, err = store.NewUser(path.Join("mails", emailUserName(recipientEmail)), emailUserName(recipientEmail), "")
+	u = &loggingBackendUser{u, w.logger}
 	if err != nil {
 		return err
 	}
@@ -330,7 +332,7 @@ func ensureMailbox(u backend.User, box string, logger *zap.Logger) (mb backend.M
 	err = os.MkdirAll(path.Join("mails", u.Username(), box), 0777)
 	if err == nil {
 		err = u.CreateMailbox(box)
-		if err.Error() == "Mailbox already exists" {
+		if err != nil && err.Error() == "Mailbox already exists" {
 			err = nil
 		}
 	}
@@ -344,7 +346,7 @@ func ensureMailbox(u backend.User, box string, logger *zap.Logger) (mb backend.M
 }
 
 // forward handles outbox
-func (w wrap) forward(env smtpd.Envelope) error {
+func (w wrap) forward(peer smtpd.Peer, env smtpd.Envelope) error {
 	err := w.dkim(&env)
 	if err != nil {
 		return errors.Wrap(err, "failed to generated DKIM signer")
@@ -353,6 +355,30 @@ func (w wrap) forward(env smtpd.Envelope) error {
 	// Deliver to external
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*10)
 	defer cancel()
+
+	// Move it to sent folder
+	defer func() {
+		var user backend.User
+		user, err := store.NewUser(path.Join("mails", emailUserName(peer.Username)), emailUserName(peer.Username), peer.Password)
+		if err != nil {
+			w.logger.Error(err.Error(), zap.Error(err))
+			return
+		}
+		user = &loggingBackendUser{user, w.logger}
+		mb, err := ensureMailbox(user, "Sent", w.logger)
+		if err != nil {
+			w.logger.Error(err.Error(), zap.Error(err))
+			return
+		}
+		err = mb.CreateMessage(
+			[]string{"\\Seen"}, time.Now(),
+			envelopeLiteral{bytes.NewReader(env.Data), len(env.Data)})
+		if err != nil {
+			w.logger.Error(err.Error(), zap.Error(err))
+			return
+		}
+	}()
+
 	return w.emit(ctx, env)
 }
 

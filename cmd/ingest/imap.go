@@ -49,8 +49,23 @@ func startImapServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Co
 
 			user, err := be.Login(conn.Info(), username, password)
 			if err != nil {
+				logger.Error(err.Error(), zap.Error(err))
 				return err
 			}
+
+			if _, err = ensureMailbox(user, "INBOX", logger); err != nil {
+				logger.Error(err.Error(), zap.Error(err))
+				return err
+			}
+			if _, err = ensureMailbox(user, "UNPAID", logger); err != nil {
+				logger.Error(err.Error(), zap.Error(err))
+				return err
+			}
+			if _, err = ensureMailbox(user, "Drafts", logger); err != nil {
+				logger.Error(err.Error(), zap.Error(err))
+				return err
+			}
+
 			ctx := conn.Context()
 			ctx.State = imap.AuthenticatedState
 			ctx.User = &loggingBackendUser{user, logger}
@@ -66,7 +81,7 @@ func startImapServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Co
 			if strings.HasSuffix(opts.Username, ".q42.nl") {
 				ctx := conn.Context()
 				ctx.State = imap.AuthenticatedState
-				user, err := be.Login(conn.Info(), "username", "password")
+				user, err := be.Login(conn.Info(), opts.Username, opts.Token)
 				if err != nil {
 					return &sasl.OAuthBearerError{Status: err.Error()}
 				}
@@ -85,7 +100,7 @@ func startImapServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Co
 		s.Close()
 	}()
 
-	log.Println("Starting IMAP server at " + ImapAddr)
+	logger.Info("Starting IMAP server at " + ImapAddr)
 	ln, err := net.Listen("tcp", ImapAddr)
 	if err != nil {
 		log.Fatal(err)
