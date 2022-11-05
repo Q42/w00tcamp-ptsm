@@ -62,6 +62,6 @@ async function submit() {
 
 <style scoped>
 .v-text-field__suffix {
-  color: grey
+  color: darkgrey !important
 }
 </style>

@@ -2,11 +2,10 @@ import * as functions from "firebase-functions";
 import * as express from "express";
 import { FieldValue } from "firebase-admin/firestore";
 import { firestore } from ".";
+import bent = require("bent");
 
 const expressApp = express();
 
-// const productId = 'prod_MjvCZGLYUzcXZy';
-// const priceId = 'price_0M0RN72xzq6B1qO3DSWkTrn9';
 // app.use(cors());
 
 expressApp.post(
@@ -15,7 +14,7 @@ expressApp.post(
   async (req, res) => {
     const event = req.body as any;
 
-    functions.logger.info("Got stripe webhook call", {
+    functions.logger.info("Got stripe webhook call: " + event.type, {
       event,
     });
 
@@ -32,8 +31,8 @@ expressApp.post(
         // handlePaymentMethodAttached(paymentMethod);
         break;
       // ... handle other event types
-      default:
-        functions.logger.info(`Unhandled event type ${event.type}`);
+      // default:
+      // functions.logger.info(`Unhandled event type ${event.type}`);
     }
 
     // Return a response to acknowledge receipt of the event
@@ -61,8 +60,46 @@ const handlePaymentIntentSucceeded = async (paymentIntent: any) => {
   // const userId = docs.docs[0].id;
   const userId = paymentIntent.receipt_email;
 
-  const amount = parseInt(paymentIntent.amount, 10);
+  let amount = parseInt(paymentIntent.amount, 10);
   const transactionId = paymentIntent.id;
+
+  // check if there are mails to be paid
+  try {
+    const mailboxes = await firestore.collection("mailboxes").get();
+    for (const mailbox of mailboxes.docs) {
+      const emails = await firestore
+        .collection("mailboxes")
+        .doc(mailbox.id)
+        .collection("emails")
+        .where("sender", "==", userId)
+        .get();
+      for (const email of emails.docs) {
+        functions.logger.info(
+          `Paying ${mailbox.id}/${email.id} from ${amount}`
+        );
+        // notify imap server
+        const response = await bent(
+          `https://mail.pay2mail.me`,
+          "POST",
+          "json"
+        )(`/paid/${mailbox.id.split("@")[0]}/${email.id}`, {
+          recipient: mailbox.id,
+          emailId: email.id,
+        });
+        functions.logger.info("Got from paid server", response);
+
+        // delete this email from db
+        await email.ref.delete();
+
+        // deduct from amount
+        amount = amount - 10;
+      }
+    }
+  } catch (error: any) {
+    functions.logger.error("Unable to pay for mails", {
+      errorMessage: error.message,
+    });
+  }
 
   // add transaction
   await firestore.runTransaction(async (t) => {

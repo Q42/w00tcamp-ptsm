@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { RouterLink, RouterView } from 'vue-router'
+import { ref, watch, computed } from 'vue';
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 import herman from './assets/herman.jpeg';
 import Login from './components/Login.vue';
 import CreateMailbox from './components/CreateMailbox.vue';
 import { email, loading, mailboxId, logout } from './stores/user';
 
+const route=useRoute();
+
+const path = computed(() =>route.path)
 const drawer = ref(false);
 </script>
 
@@ -13,6 +16,11 @@ const drawer = ref(false);
   <v-layout>
     <template v-if="loading">
       <v-progress-circular indeterminate class="mx-auto" />
+    </template>
+    <template v-else-if="path.startsWith('/pay/') || path.startsWith('/paid/')">
+      <v-main>
+        <RouterView />
+      </v-main>
     </template>
     <template v-else-if="!email">
       <Login />

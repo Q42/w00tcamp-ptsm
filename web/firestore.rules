@@ -6,6 +6,10 @@ service cloud.firestore {
     match /mailboxes/{m} {
       allow create: if request.resource.data.user == request.auth.token.email;
     }
+    // TODO hihi everyone has read (not list!) access to all mails :shrug:
+    match /mailboxes/{m}/emails/{e} {
+      allow get: if true;
+    }
     match /balance/{u} {
       allow read: if u == request.auth.token.email;
     }
