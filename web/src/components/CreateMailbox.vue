@@ -15,7 +15,7 @@
             v-model="name"
             label="Email prefix"
             required
-            suffix="@ptsm.q42.com"
+            suffix="@pay2mail.me"
             hint="Must be unique, and [a-z0-9_]"
           />
         </v-responsive>
@@ -51,7 +51,7 @@ async function submit() {
   }
 
   try {
-    const ref = doc(db, 'mailboxes', name.value + '@ptsm.q42.com');
+    const ref = doc(db, 'mailboxes', name.value + '@pay2mail.me');
     setDoc(ref, {user: email.value});
   } catch(err: any) {
     console.error(err.message);

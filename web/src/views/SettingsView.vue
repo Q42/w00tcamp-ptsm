@@ -21,7 +21,7 @@ onMounted(async () => {
       Download an authenticated mobile configuration file that you can use to provision your iOS device with the correct IMAP and SMTP settings.
     </v-card-text>
     <v-card-actions>
-      <form target="_blank" method="POST" action="https://mail.ptsm.q42.com/provision">
+      <form target="_blank" method="POST" action="https://mail.pay2mail.me/provision">
         <input type="hidden" name="authorization" :value="token" />
         <v-btn type="submit" :disabled="!token">Download</v-btn>
       </form>

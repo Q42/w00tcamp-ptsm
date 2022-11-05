@@ -4,12 +4,20 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"fmt"
+	"io"
 	"net"
 	"os"
-	"os/exec"
+	"path"
 	"strings"
+	"time"
 
+	"github.com/bcampbell/tameimap/store"
 	"github.com/chrj/smtpd"
+	"github.com/emersion/go-imap/backend"
+	"github.com/emersion/go-message/mail"
+	"github.com/emersion/go-msgauth/dkim"
+	"github.com/pkg/errors"
 	"github.com/xtgo/uuid"
 	"go.uber.org/zap"
 )
@@ -20,18 +28,17 @@ type protoAddr struct {
 }
 
 type wrap struct {
-	logger *zap.Logger
+	logger    *zap.Logger
+	getSigner func() (*dkim.Signer, error)
 }
 
-func startSmtpServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Config) {
-	flagset.Parse(os.Args[1:])
-
+func startSmtpServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Config, getSigner func() (*dkim.Signer, error)) {
 	var servers []*smtpd.Server
 	for _, listen := range []protoAddr{{"starttls", ":25"}, {"starttls", ":587"}, {"tls", ":465"}} {
 		var err error
 		var lsnr net.Listener
 
-		w := wrap{logger.With(zap.String("protocol", listen.protocol))}
+		w := wrap{logger.With(zap.String("protocol", listen.protocol)), getSigner}
 		server := &smtpd.Server{
 			Hostname:          *hostName,
 			WelcomeMessage:    *welcomeMsg,
@@ -45,24 +52,26 @@ func startSmtpServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Co
 			SenderChecker:     w.senderChecker,
 			RecipientChecker:  w.recipientChecker,
 			Handler:           w.mailHandler,
+			Authenticator:     w.authenticator,
+			AllowAnonymous:    true,
 		}
 
 		switch listen.protocol {
 		case "":
-			logger.Info("listening on address")
+			logger.Sugar().Infof("listening on address %s", listen.address)
 			lsnr, err = net.Listen("tcp", listen.address)
 
 		case "starttls":
 			server.TLSConfig = tlsConfig
 			server.ForceTLS = *localForceTLS
 
-			logger.Info("listening on address (STARTTLS)")
+			logger.Sugar().Infof("listening on address %s (STARTTLS)", listen.address)
 			lsnr, err = net.Listen("tcp", listen.address)
 
 		case "tls":
 			server.TLSConfig = tlsConfig
 
-			logger.Info("listening on address (TLS)")
+			logger.Sugar().Infof("listening on address %s (TLS)", listen.address)
 			lsnr, err = tls.Listen("tcp", listen.address, server.TLSConfig)
 
 		default:
@@ -157,6 +166,11 @@ func addrAllowed(addr string, allowedAddrs []string) bool {
 }
 
 func (w wrap) senderChecker(peer smtpd.Peer, addr string) error {
+	if peer.Username != "" {
+		// TODO verify if the mail is FROM one of us or TO one of us
+		_ = 0
+	}
+
 	if allowedSender == nil {
 		// Any sender is permitted
 		return nil
@@ -190,37 +204,199 @@ func (w wrap) recipientChecker(peer smtpd.Peer, addr string) error {
 	return smtpd.Error{Code: 451, Message: "Bad recipient address"}
 }
 
-func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) error {
+func (w wrap) authenticator(peer smtpd.Peer, username, password string) error {
+	return FirestoreAuthenticator(context.Background(), w.logger, peer, username, password)
+}
+
+func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) (err error) {
+	logger := w.logger.With(zap.String("from", env.Sender), zap.Strings("to", env.Recipients), zap.String("uuid", generateUUID()))
+	defer func() {
+		if err != nil {
+			logger.Error(errors.Wrap(err, "failed to handle mail").Error(), zap.Error(err))
+			if !errors.Is(err, smtpd.Error{}) {
+				err = smtpd.Error{Code: 500, Message: "Internal server error"}
+			}
+		} else {
+			logger.Info("handled mail successfully")
+		}
+	}()
+	env.AddReceivedLine(peer)
 	peerIP := ""
 	if addr, ok := peer.Addr.(*net.TCPAddr); ok {
 		peerIP = addr.IP.String()
 	}
+	logger = logger.With(zap.String("peer", peerIP))
+	logger.With(zap.String("data", string(env.Data))).Info("handling mail")
 
-	logger := w.logger.With(zap.String("from", env.Sender), zap.Strings("to", env.Recipients), zap.String("peer", peerIP), zap.String("uuid", generateUUID()))
-
-	env.AddReceivedLine(peer)
-
-	if *command != "" {
-		cmdLogger := logger.With(zap.String("command", *command))
-
-		var stdout bytes.Buffer
-		var stderr bytes.Buffer
-
-		cmd := exec.Command(*command)
-		cmd.Stdin = bytes.NewReader(env.Data)
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-
-		err := cmd.Run()
-		if err != nil {
-			cmdLogger.With(zap.Error(err)).Error(stderr.String())
-			return smtpd.Error{Code: 554, Message: "External command failed"}
-		}
-
-		cmdLogger.Info("pipe command successful: " + stdout.String())
+	// Abuse mails are only logged
+	if strings.HasPrefix(env.Recipients[0], "abuse@") {
+		w.logger.Warn("Abuse email report")
+		return smtpd.Error{Code: 250, Message: "Thank you."}
 	}
 
-	logger.With(zap.String("data", string(env.Data))).Info("TODO delivering mail from peer using smarthost")
+	// Sender on this server
+	if peer.Username != "" {
+		return w.forward(peer, env)
+	}
+
+	// Recipients on this server
+	var errs []error
+	for _, rec := range env.Recipients {
+		addr, err := mail.ParseAddress(rec)
+		if err != nil {
+			errs = append(errs, err)
+			logger.Warn("failed to parse recipient", zap.String("recipient", rec))
+			continue
+		}
+		if strings.HasSuffix(addr.Address, *domain) {
+			if err := w.deliver(addr.Address, env); err != nil {
+				errs = append(errs, errors.Wrap(err, "deliver failed"))
+			}
+		} else {
+			// Error because we are not an open relay:
+			// you must either be known by this server, or send to someone on this server
+			errs = append(errs, smtpd.Error{Code: 451, Message: "Bad recipient address. We are no open relay."})
+		}
+	}
+	if len(errs) > 0 {
+		return errs[0]
+	}
+
+	return nil
+}
+
+// deliver handles inbox
+func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
+	be, err := FirestoreBackend(context.Background())
+	if err != nil {
+		return err
+	}
+	exists, err := be.Exists(recipientEmail)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return smtpd.Error{Code: 451, Message: fmt.Sprintf("Bad recipient address %q", recipientEmail)}
+	}
+
+	w.logger.Debug("User exists", zap.String("recipient", recipientEmail))
+	if err = os.MkdirAll(path.Join("mails", emailUserName(recipientEmail)), 0777); err != nil {
+		return errors.Wrap(err, "failed to make inbox")
+	}
+
+	var u backend.User
+	u, err = store.NewUser(path.Join("mails", emailUserName(recipientEmail)), emailUserName(recipientEmail), "")
+	u = &loggingBackendUser{u, w.logger}
+	if err != nil {
+		return err
+	}
+
+	// TODO subtract payment & forward, or place in quarantine & bounce
+	isPaid := false
+
+	if !isPaid {
+		bounce := smtpd.Envelope{
+			Sender:     "info@" + *domain,
+			Recipients: []string{env.Sender},
+			Data: []byte(fmt.Sprintf("From: %s\r\n"+
+				"To: %s\r\n"+
+				"Subject: E-mail requires payment\r\n"+
+				"Date: %s\r\n"+
+				"Message-ID: <0000000@localhost/>\r\n"+
+				"Content-Type: text/plain\r\n"+
+				"\r\n"+
+				"You need to pay first", "info@"+*domain, env.Sender, time.Now().Format(time.RFC1123Z)))}
+		ctx, cancel := context.WithTimeout(context.TODO(), time.Second*10)
+		defer cancel()
+		if err = w.emit(ctx, bounce); err != nil {
+			w.logger.Error("Failed to bounce for payment", zap.String("source", env.Sender), zap.Error(err))
+		}
+	}
+
+	var mb backend.Mailbox
+	if isPaid {
+		mb, err = ensureMailbox(u, "INBOX", w.logger)
+	} else {
+		mb, err = ensureMailbox(u, "UNPAID", w.logger)
+	}
+	if err != nil {
+		return err
+	}
+	return mb.CreateMessage(nil, time.Now(), envelopeLiteral{bytes.NewReader(env.Data), len(env.Data)})
+}
+
+func ensureMailbox(u backend.User, box string, logger *zap.Logger) (mb backend.Mailbox, err error) {
+	if box == "" {
+		return nil, os.MkdirAll(path.Join("mails", u.Username()), 0777)
+	}
+	err = os.MkdirAll(path.Join("mails", u.Username(), box), 0777)
+	if err == nil {
+		err = u.CreateMailbox(box)
+		if err != nil && err.Error() == "Mailbox already exists" {
+			err = nil
+		}
+	}
+	if err == nil {
+		mb, err = u.GetMailbox(box)
+	}
+	if err != nil {
+		logger.Warn("Failed to create mailbox", zap.String("source", u.Username()), zap.Error(err), zap.String("mailbox", box))
+	}
+	return
+}
+
+// forward handles outbox
+func (w wrap) forward(peer smtpd.Peer, env smtpd.Envelope) error {
+	err := w.dkim(&env)
+	if err != nil {
+		return errors.Wrap(err, "failed to generated DKIM signer")
+	}
+
+	// Deliver to external
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*10)
+	defer cancel()
+
+	// Move it to sent folder
+	defer func() {
+		var user backend.User
+		user, err := store.NewUser(path.Join("mails", emailUserName(peer.Username)), emailUserName(peer.Username), peer.Password)
+		if err != nil {
+			w.logger.Error(err.Error(), zap.Error(err))
+			return
+		}
+		user = &loggingBackendUser{user, w.logger}
+		mb, err := ensureMailbox(user, "Sent", w.logger)
+		if err != nil {
+			w.logger.Error(err.Error(), zap.Error(err))
+			return
+		}
+		err = mb.CreateMessage(
+			[]string{"\\Seen"}, time.Now(),
+			envelopeLiteral{bytes.NewReader(env.Data), len(env.Data)})
+		if err != nil {
+			w.logger.Error(err.Error(), zap.Error(err))
+			return
+		}
+	}()
+
+	return w.emit(ctx, env)
+}
+
+// DKIM
+func (w wrap) dkim(env *smtpd.Envelope) error {
+	signer, err := w.getSigner()
+	if err != nil {
+		return err
+	}
+	_, err = signer.Write(env.Data)
+	if err != nil {
+		return err
+	}
+	err = signer.Close()
+	if err != nil {
+		return err
+	}
+	PrefixLine(env, []byte(signer.Signature()))
 	return nil
 }
 
@@ -229,39 +405,15 @@ func generateUUID() string {
 	return uniqueID.String()
 }
 
-func getTLSConfig(logger *zap.Logger) *tls.Config {
-	// Ciphersuites as defined in stock Go but without 3DES and RC4
-	// https://golang.org/src/crypto/tls/cipher_suites.go
-	var tlsCipherSuites = []uint16{
-		tls.TLS_AES_128_GCM_SHA256,
-		tls.TLS_AES_256_GCM_SHA384,
-		tls.TLS_CHACHA20_POLY1305_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // does not provide PFS
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // does not provide PFS
-	}
+type envelopeLiteral struct {
+	io.Reader
+	len int
+}
 
-	if *localCert == "" || *localKey == "" {
-		logger.
-			With(zap.String("cert_file", *localCert), zap.String("key_file", *localKey)).
-			Fatal("TLS certificate/key file not defined in config")
-	}
+func (e envelopeLiteral) Len() int {
+	return e.len
+}
 
-	cert, err := tls.LoadX509KeyPair(*localCert, *localKey)
-	if err != nil {
-		logger.With(zap.Error(err)).
-			Fatal("cannot load X509 keypair")
-	}
-
-	return &tls.Config{
-		PreferServerCipherSuites: true,
-		MinVersion:               tls.VersionTLS12,
-		CipherSuites:             tlsCipherSuites,
-		Certificates:             []tls.Certificate{cert},
-	}
+func (e envelopeLiteral) Read(b []byte) (n int, err error) {
+	return e.Reader.Read(b)
 }
