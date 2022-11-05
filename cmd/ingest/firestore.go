@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"cloud.google.com/go/firestore"
 	"github.com/bcampbell/tameimap/store"
@@ -106,6 +107,15 @@ func (b firestoreBackend) Login(connInfo *imap.ConnInfo, username string, passwo
 		}
 	}
 	return nil, backend.ErrInvalidCredentials
+}
+
+func (b firestoreBackend) QuarantineEmail(receipientEmail string, id string, env *smtpd.Envelope) (err error) {
+	data := map[string]interface{}{"sender": env.Sender, "date": time.Now()}
+	if utf8.ValidString(string(env.Data)) {
+		data["data"] = string(env.Data)
+	}
+	_, err = b.db.Collection("mailboxes").Doc(receipientEmail).Collection("emails").Doc(id).Create(context.Background(), data)
+	return err
 }
 
 var _ backend.Backend = firestoreBackend{}

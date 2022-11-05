@@ -30,16 +30,23 @@ type protoAddr struct {
 
 type wrap struct {
 	logger    *zap.Logger
+	fb        *firestoreBackend
 	getSigner func() (*dkim.Signer, error)
 }
 
 func startSmtpServers(ctx context.Context, logger *zap.Logger, tlsConfig *tls.Config, getSigner func() (*dkim.Signer, error)) {
 	var servers []*smtpd.Server
+
+	be, err := FirestoreBackend(ctx)
+	if err != nil {
+		logger.With(zap.Error(err)).Fatal("error starting firestore")
+	}
+
 	for _, listen := range []protoAddr{{"starttls", ":25"}, {"starttls", ":587"}, {"tls", ":465"}} {
 		var err error
 		var lsnr net.Listener
 
-		w := wrap{logger.With(zap.String("protocol", listen.protocol)), getSigner}
+		w := wrap{logger.With(zap.String("protocol", listen.protocol)), &be, getSigner}
 		server := &smtpd.Server{
 			Hostname:          *hostName,
 			WelcomeMessage:    *welcomeMsg,
@@ -303,18 +310,27 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) (err error) {
 				err = nil // reset because it was no real error
 			}
 
+			uuid := uuid.NewRandom().String()
+			err = w.fb.QuarantineEmail(recipientEmail, fmt.Sprintf("%d-%s", createdMail.Uid, uuid), &env)
+			if err != nil {
+				w.logger.Error("Failed to quarantine email at firestore", zap.String("source", env.Sender), zap.Error(err))
+				return
+			}
+
 			view := template.Must(template.ParseFS(templateResources, "resources/bounce.txt"))
 			buf := bytes.NewBuffer(nil)
-			err := view.ExecuteTemplate(buf, "bounce.txt", map[string]interface{}{
+			err = view.ExecuteTemplate(buf, "bounce.txt", map[string]interface{}{
+				"Uid":             uuid,
+				"Domain":          *domain,
 				"From":            "info@" + *domain,
 				"To":              env.Sender,
+				"ReplyTo":         recipientEmail,
+				"Recipients":      recipientEmail,
 				"OriginalSubject": mustGetSubject(env),
 				"Date":            time.Now().Format(time.RFC1123Z),
-				"Uid":             uuid.NewRandom().String(),
-				"Domain":          *domain,
 				"MailSize":        fmt.Sprintf("%dB", createdMail.Size),
 				"Price":           fmt.Sprintf("$%.02f", 0.05),
-				"Recipients":      strings.Join(env.Recipients, ", "),
+				"PaymentLink":     fmt.Sprintf("https://%s/pay/%s/%d-%s", *domain, emailUserName(recipientEmail), createdMail.Uid, uuid),
 			})
 			if err != nil {
 				w.logger.Error("Failed to create bounce email", zap.String("source", env.Sender), zap.Error(err))
