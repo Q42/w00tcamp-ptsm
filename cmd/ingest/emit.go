@@ -26,13 +26,16 @@ func (w wrap) emit(ctx context.Context, env smtpd.Envelope) error {
 		for _, rec := range env.Recipients {
 			host := strings.Split(rec, "@")[1]
 			addrs, err := net.DefaultResolver.LookupMX(ctx, host)
+			sort.Slice(addrs, func(i, j int) bool { return addrs[i].Pref < addrs[j].Pref })
 			if err != nil {
 				return errors.Wrap(err, "failed to lookup mx")
 			}
 			if len(addrs) == 0 {
 				return errors.Wrap(err, "no mx servers")
 			}
-			err = smtp.SendMail(addrs[0].Host+":587", nil, env.Sender, env.Recipients, env.Data)
+			// Hardcode 25 because this supports STARTLS too and does not block like 587 seems to do
+			// which does work with % openssl s_client -host smtp.gmail.com -port 587 -starttls smtp -crlf
+			err = smtp.SendMail(addrs[0].Host+":25", nil, env.Sender, env.Recipients, env.Data)
 			if err != nil {
 				return errors.Wrap(err, "failed to create outgoing connection")
 			}
