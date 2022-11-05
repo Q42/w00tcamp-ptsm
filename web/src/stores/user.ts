@@ -44,11 +44,12 @@ auth.onAuthStateChanged(async (user) => {
         } else {
           mailboxId.value = null;
         }
+        loading.value = false;
       }
     );
   } else {
     email.value = null;
     mailboxId.value = null;
+    loading.value = false;
   }
-  loading.value = false;
 });

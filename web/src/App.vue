@@ -50,6 +50,7 @@ const drawer = ref(false);
         <v-divider></v-divider>
 
         <v-list density="compact" nav>
+          <v-list-item prepend-icon="mdi-monitor-dashboard" title="Dashboard" to="/"></v-list-item>
           <v-list-item prepend-icon="mdi-inbox-arrow-down" title="Inbox" to="/inbox"></v-list-item>
           <v-list-item prepend-icon="mdi-cash-clock" title="Pending payment" to="/pending-payment"></v-list-item>
         </v-list>

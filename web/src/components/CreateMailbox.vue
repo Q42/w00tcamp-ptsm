@@ -19,7 +19,7 @@
             hint="Must be unique, and [a-z0-9_]"
           />
         </v-responsive>
-      <v-btn>
+      <v-btn type="submit">
         Make it happen!
       </v-btn>
       <p class="my-5">{{ msg }}</p>
@@ -50,12 +50,12 @@ async function submit() {
     return;
   }
 
-  const ref = doc(db, 'mailboxes', name.value + '@ptsm.q42.com');
-  const existing = await getDoc(ref)
-  if (existing.exists()) {
-    msg.value = 'This address already exists! Try another one...';
-  } else {
+  try {
+    const ref = doc(db, 'mailboxes', name.value + '@ptsm.q42.com');
     setDoc(ref, {user: email.value});
+  } catch(err: any) {
+    console.error(err.message);
+    msg.value = 'This address already exists! Try another one...';
   }
 }
 </script>

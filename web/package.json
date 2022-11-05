@@ -7,8 +7,8 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit",
-    "deploy:hosting": "firebase deploy --only hosting",
-    "deploy": "firebase deploy"
+    "deploy:hosting": "npm run build && firebase deploy --only hosting,firestore",
+    "deploy": "npm run build && firebase deploy"
   },
   "dependencies": {
     "@mdi/font": "^7.0.96",

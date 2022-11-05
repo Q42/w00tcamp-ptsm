@@ -1,7 +1,16 @@
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /mailboxes/{mailbox=*} {
+    match /mailboxes/{m} {
       allow read, update: if resource.data.user == request.auth.token.email;
+    }
+    match /mailboxes/{m} {
+      allow create: if request.resource.data.user == request.auth.token.email;
+    }
+    match /balance/{u} {
+      allow read: if u == request.auth.token.email;
+    }
+    match /balance/{u}/transactions/{t} {
+      allow read: if u == request.auth.token.email;
     }
   }
 }
