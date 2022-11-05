@@ -42,22 +42,28 @@ func (m *loggingBackendUser) GetMailbox(name string) (backend.Mailbox, error) {
 
 func (m *loggingBackendMailbox) Info() (out *imap.MailboxInfo, err error) {
 	defer func() {
-		m.Logger.Info("Info")
 		switch m.Name() {
 		case "Sent":
-			out.Attributes = append(out.Attributes, imap.SentAttr)
+			out.Attributes = include(out.Attributes, imap.SentAttr)
 		case "Drafts":
-			out.Attributes = append(out.Attributes, imap.DraftsAttr)
+			out.Attributes = include(out.Attributes, imap.DraftsAttr)
 		case "Junk":
-			out.Attributes = append(out.Attributes, imap.JunkAttr)
+			out.Attributes = include(out.Attributes, imap.JunkAttr)
 		case "All":
-			out.Attributes = append(out.Attributes, imap.AllAttr)
+			out.Attributes = include(out.Attributes, imap.AllAttr)
 		case "Trash":
-			out.Attributes = append(out.Attributes, imap.TrashAttr)
+			out.Attributes = include(out.Attributes, imap.TrashAttr)
 		}
-		if m.Name() == "Sent" {
-			out.Attributes = append(out.Attributes, imap.SentAttr)
-		}
+		m.Logger.Info("Info", zap.Any("info", out))
 	}()
 	return m.Mailbox.Info()
+}
+
+func include(list []string, needle string) []string {
+	for _, s := range list {
+		if needle == s {
+			return list
+		}
+	}
+	return append(list, needle)
 }
