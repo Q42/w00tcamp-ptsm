@@ -1,0 +1,8 @@
+From: {{.From}}
+To: {{.To}}
+Subject: [E-mail requires payment] {{.OriginalSubject}}
+Date: {{.Date}}
+Message-ID: <{{.Uid}}@bounces.{{.Domain}}/>
+Content-Type: text/plain
+
+You need to pay first. The recipients {{.Recipients}} value their time, so to have them receive the mail you sent - of {{.MailSize}} - costs you {{.Price}}.

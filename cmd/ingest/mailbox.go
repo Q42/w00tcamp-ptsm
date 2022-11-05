@@ -1,6 +1,9 @@
 package main
 
 import (
+	"time"
+
+	"github.com/bcampbell/tameimap/store"
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/backend"
 	"go.uber.org/zap"
@@ -13,7 +16,8 @@ type loggingBackendUser struct {
 
 type loggingBackendMailbox struct {
 	backend.Mailbox
-	Logger *zap.Logger
+	Logger  *zap.Logger
+	LastUid uint32
 }
 
 var _ backend.User = &loggingBackendUser{}
@@ -26,7 +30,7 @@ func (m *loggingBackendUser) ListMailboxes(subscribed bool) ([]backend.Mailbox, 
 		return nil, err
 	}
 	for i, mb := range mbs {
-		mbs[i] = &loggingBackendMailbox{mb, m.Logger.With(zap.String("mailbox", mb.Name()))}
+		mbs[i] = &loggingBackendMailbox{mb, m.Logger.With(zap.String("mailbox", mb.Name())), 0}
 	}
 	return mbs, err
 }
@@ -37,7 +41,7 @@ func (m *loggingBackendUser) GetMailbox(name string) (backend.Mailbox, error) {
 	if err != nil && mb == nil {
 		return nil, err
 	}
-	return &loggingBackendMailbox{mb, m.Logger.With(zap.String("mailbox", name))}, err
+	return &loggingBackendMailbox{mb, m.Logger.With(zap.String("mailbox", name)), 0}, err
 }
 
 func (m *loggingBackendMailbox) Info() (out *imap.MailboxInfo, err error) {
@@ -66,4 +70,21 @@ func include(list []string, needle string) []string {
 		}
 	}
 	return append(list, needle)
+}
+
+func (m *loggingBackendMailbox) CreateMessage(flags []string, date time.Time, body imap.Literal) (err error) {
+	defer func() {
+		if mbox, isStore := m.Mailbox.(*store.Mailbox); err == nil && isStore {
+			err = noErrMailCreated{mbox.Messages[len(mbox.Messages)-1]}
+		}
+	}()
+	return m.Mailbox.CreateMessage(flags, date, body)
+}
+
+type noErrMailCreated struct {
+	*store.Message
+}
+
+func (noErrMailCreated) Error() string {
+	return "not an error: mail created"
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/bcampbell/tameimap/store"
@@ -266,7 +267,7 @@ func (w wrap) mailHandler(peer smtpd.Peer, env smtpd.Envelope) (err error) {
 }
 
 // deliver handles inbox
-func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
+func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) (err error) {
 	be, err := FirestoreBackend(context.Background())
 	if err != nil {
 		return err
@@ -295,22 +296,39 @@ func (w wrap) deliver(recipientEmail string, env smtpd.Envelope) error {
 	isPaid := false
 
 	if !isPaid {
-		bounce := smtpd.Envelope{
-			Sender:     "info@" + *domain,
-			Recipients: []string{env.Sender},
-			Data: []byte(fmt.Sprintf("From: %s\r\n"+
-				"To: %s\r\n"+
-				"Subject: E-mail requires payment\r\n"+
-				"Date: %s\r\n"+
-				"Message-ID: <0000000@localhost/>\r\n"+
-				"Content-Type: text/plain\r\n"+
-				"\r\n"+
-				"You need to pay first", "info@"+*domain, env.Sender, time.Now().Format(time.RFC1123Z)))}
-		ctx, cancel := context.WithTimeout(context.TODO(), time.Second*10)
-		defer cancel()
-		if err = w.emit(ctx, bounce); err != nil {
-			w.logger.Error("Failed to bounce for payment", zap.String("source", env.Sender), zap.Error(err))
-		}
+		defer func() {
+			// HACK mechanism to get the createdEmail from stupid library mailbox.CreateMessage
+			var createdMail noErrMailCreated
+			if errors.As(err, &createdMail) {
+				err = nil // reset because it was no real error
+			}
+
+			view := template.Must(template.ParseFS(templateResources, "resources/bounce.txt"))
+			buf := bytes.NewBuffer(nil)
+			err := view.ExecuteTemplate(buf, "bounce.txt", map[string]interface{}{
+				"From":            "info@" + *domain,
+				"To":              env.Sender,
+				"OriginalSubject": mustGetSubject(env),
+				"Date":            time.Now().Format(time.RFC1123Z),
+				"Uid":             uuid.NewRandom().String(),
+				"Domain":          *domain,
+				"MailSize":        fmt.Sprintf("%dB", createdMail.Size),
+				"Price":           fmt.Sprintf("$%.02f", 0.05),
+				"Recipients":      strings.Join(env.Recipients, ", "),
+			})
+			if err != nil {
+				w.logger.Error("Failed to create bounce email", zap.String("source", env.Sender), zap.Error(err))
+			}
+			bounce := smtpd.Envelope{
+				Sender:     "info@" + *domain,
+				Recipients: []string{env.Sender},
+				Data:       []byte(buf.Bytes())}
+			ctx, cancel := context.WithTimeout(context.TODO(), time.Second*10)
+			defer cancel()
+			if err = w.emit(ctx, bounce); err != nil {
+				w.logger.Error("Failed to bounce for payment", zap.String("source", env.Sender), zap.Error(err))
+			}
+		}()
 	}
 
 	var mb backend.Mailbox
@@ -416,4 +434,35 @@ func (e envelopeLiteral) Len() int {
 
 func (e envelopeLiteral) Read(b []byte) (n int, err error) {
 	return e.Reader.Read(b)
+}
+
+func mustGetSubject(env smtpd.Envelope) string {
+	header, _ := getHeader(env)
+	subj, _ := header.Subject()
+	return subj
+}
+
+func getHeader(env smtpd.Envelope) (header mail.Header, err error) {
+	defer func() {
+		if err != nil {
+			zap.L().Warn("Failed to read subject from envelope", zap.Error(err))
+		}
+	}()
+	mr, err := mail.CreateReader(bytes.NewReader(env.Data))
+	if err != nil {
+		return
+	}
+
+	// Read each mail's parts
+	for {
+		_, err = mr.NextPart()
+		if err == io.EOF {
+			err = nil
+			break
+		} else if err != nil {
+			return
+		}
+	}
+	header = mr.Header
+	return
 }
